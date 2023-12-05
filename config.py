@@ -94,6 +94,12 @@ PARAMS_CONFIG = {
             'help': 'enable SMoE-drop - Freeze gate',
             'dest': 'smoe_dropout'
         },
+        '--optimal_policy': {
+            'action': 'store_true',
+            'default': False,
+            'help': 'Searching the best routing policy',
+            'dest': 'optimal_policy'
+        },
         "--load_balance": {
             "type": float,
             "default": 0.0,
