@@ -24,7 +24,7 @@ Sparse mixture of experts (SMoE) offers an appealing solution to scale up the mo
 
 ##### Prepare Enwik8, Text8 and Wikitext-103 Datasets: 
 
-- Download the enwik8, text8, wikitext-103 dataset from [here](https://github.com/laekov/fastmoe/blob/master/examples/transformer-xl/scripts/getdata.sh), then change bash scripts based on your local data paths`</br>
+- Download the enwik8, text8, wikitext-103 dataset from [here](https://github.com/laekov/fastmoe/blob/master/examples/transformer-xl/scripts/getdata.sh), then change bash scripts based on your local data paths.
 ```bash
 data_folder/
 └── pretraining
