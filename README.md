@@ -17,7 +17,6 @@ Sparse mixture of experts (SMoE) offers an appealing solution to scale up the mo
 
 - pytorch
 - fastmoe: https://github.com/laekov/fastmoe
-- transformer: https://github.com/huggingface/transformers
 
 ## Usage
 
