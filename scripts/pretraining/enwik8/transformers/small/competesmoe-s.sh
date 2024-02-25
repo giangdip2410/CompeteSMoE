@@ -21,6 +21,12 @@ args="
 --batch-split 2 \
 --nbatches 1000 \
 --optimal_policy \
+--opt_blance \
+--act_experts linear \
+--opt_loss mse \
+--freq_type fix \
+--freq 1.0 \
+--alpha 5.0 \
 --checkpoint checkpoints/enwik8/transformers-s/competesmoe/competesmoe.pt \
 "
 

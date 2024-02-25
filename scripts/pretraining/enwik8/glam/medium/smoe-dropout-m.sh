@@ -3,9 +3,9 @@ mkdir -p checkpoints/enwik8/glam-m/smoe_dropout
 args="
 --data /home/gtruong/Project/ICML2/data/enwik8 \
 --base_arch glam \
---architecture sgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name smoe \
---nlayers 4 \
+--nlayers 12 \
 --hid-sz 352 \
 --inner-hid-sz 352 \
 --nheads 8 \

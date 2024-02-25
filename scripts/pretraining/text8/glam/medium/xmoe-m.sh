@@ -3,9 +3,9 @@ mkdir -p checkpoints/text8/glam-m/xmoe
 args="
 --data /home/gtruong/Project/ICML2/data/text8 \
 --base_arch glam \
---architecture sgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name xmoe \
---nlayers 4 \
+--nlayers 12 \
 --hid-sz 352 \
 --inner-hid-sz 352 \
 --nheads 8 \

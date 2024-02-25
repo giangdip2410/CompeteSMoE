@@ -7,11 +7,13 @@ from custom_layers import FMoE
 from custom_layers import FMoELinear
 from custom_layers_opt import FMoEOpt
 
+
 class _Expert(nn.Module):
     r"""
     An expert using 2 FMoELinear modules to speed up the computation of experts
     within one worker.
     """
+
     def __init__(self, num_expert, d_model, d_hidden, activation, rank=0):
         super().__init__()
         self.htoh4 = FMoELinear(num_expert, d_model, d_hidden, bias=True, rank=rank)
@@ -28,12 +30,14 @@ class _Expert(nn.Module):
         x = self.h4toh(x, fwd_expert_count)
         return x
 
+
 class FMoETransformerMLP(FMoE):
     r"""
     A complete MoE MLP module in a Transformer block.
     * `activation` is the activation function to be used in MLP in each expert.
     * `d_hidden` is the dimension of the MLP layer.
     """
+
     def __init__(
         self,
         num_expert=32,
@@ -42,9 +46,12 @@ class FMoETransformerMLP(FMoE):
         activation=torch.nn.GELU(),
         expert_dp_comm="none",
         expert_rank=0,
+        moe_top_k=2,
         **kwargs
     ):
-        super().__init__(num_expert=num_expert, d_model=d_model, **kwargs)
+        super().__init__(
+            num_expert=num_expert, d_model=d_model, moe_top_k=moe_top_k, **kwargs
+        )
         self.experts = _Expert(
             num_expert, d_model, d_hidden, activation, rank=expert_rank
         )
@@ -67,6 +74,7 @@ class FMoETransformerMLPOpt(FMoEOpt):
     * `activation` is the activation function to be used in MLP in each expert.
     * `d_hidden` is the dimension of the MLP layer.
     """
+
     def __init__(
         self,
         num_expert=32,
@@ -75,9 +83,29 @@ class FMoETransformerMLPOpt(FMoEOpt):
         activation=torch.nn.GELU(),
         expert_dp_comm="none",
         expert_rank=0,
+        moe_top_k=2,
+        freq=0.0,
+        alpha=0.0,
+        act_experts="shuffle",
+        g_blance=False,
+        opt_blance=False,
+        combine_gate=False,
+        opt_loss="mse",
         **kwargs
     ):
-        super().__init__(num_expert=num_expert, d_model=d_model, **kwargs)
+        super().__init__(
+            num_expert=num_expert,
+            d_model=d_model,
+            moe_top_k=moe_top_k,
+            freq=freq,
+            alpha=alpha,
+            act_experts=act_experts,
+            g_blance=g_blance,
+            opt_blance=opt_blance,
+            combine_gate=combine_gate,
+            opt_loss=opt_loss,
+            **kwargs
+        )
         self.experts = _Expert(
             num_expert, d_model, d_hidden, activation, rank=expert_rank
         )

@@ -8,6 +8,7 @@ from custom_utils import get_torch_default_comm
 
 _moe_group = None
 
+
 def ensure_comm(t, comm):
     if comm is None:
         comm = get_torch_default_comm()
@@ -15,8 +16,10 @@ def ensure_comm(t, comm):
     _moe_group = comm
     fmoe_cuda.ensure_nccl(comm, t)
 
+
 def get_moe_group():
     return _moe_group
+
 
 def count_by_gate(gate, num_expert, world_size, require_pos=True):
     with torch.no_grad():
@@ -41,6 +44,7 @@ def count_by_gate(gate, num_expert, world_size, require_pos=True):
             fmoe_cuda.assign_pos(lec_cum, gate, pos)
     return pos, local_expert_count, global_expert_count
 
+
 def prepare_forward(gate, num_expert, world_size):
     r"""
     Prepare necessary information from gate output for MoE computation.
@@ -52,11 +56,11 @@ def prepare_forward(gate, num_expert, world_size):
         world_size: number of workers that hold different experts.
         comm: the communicator of all workers in the expert-parallel group.
     """
-    pos, local_expert_count, global_expert_count = count_by_gate(gate, 
-            num_expert, world_size)
+    pos, local_expert_count, global_expert_count = count_by_gate(
+        gate, num_expert, world_size
+    )
     with torch.no_grad():
-        fwd_expert_count = global_expert_count.view(world_size,
-                num_expert).sum(dim=0)
+        fwd_expert_count = global_expert_count.view(world_size, num_expert).sum(dim=0)
         fwd_batch_size = int(fwd_expert_count.sum().item())
     return (
         pos,
@@ -66,18 +70,22 @@ def prepare_forward(gate, num_expert, world_size):
         fwd_batch_size,
     )
 
+
 def _local_scatter(inp, pos):
     inp_buf = torch.index_select(inp, 0, pos)
     return inp_buf
 
+
 def _local_gather(inp, pos, out_batch_size, maybe_overlap=True):
-    inp_buf = torch.zeros(out_batch_size, inp.shape[-1],
-            dtype=inp.dtype, device=inp.device)
+    inp_buf = torch.zeros(
+        out_batch_size, inp.shape[-1], dtype=inp.dtype, device=inp.device
+    )
     if maybe_overlap:
         inp_buf.index_add_(0, pos, inp)
     else:
         inp_buf.index_copy_(0, pos, inp)
     return inp_buf
+
 
 class MOEScatter(Function):
     r"""
@@ -130,6 +138,7 @@ class MOEScatter(Function):
         grad_in = _local_gather(local_grad_in, pos, inp_batch_size)
         return grad_in, None, None, None, None, None
 
+
 class MOEGather(Function):
     r"""
     Gather output samples from contiguous alone experts back to [batch x
@@ -156,8 +165,9 @@ class MOEGather(Function):
             )
         else:
             local_output_buf = global_output_buf
-        output = _local_gather(local_output_buf, pos, local_batch_size,
-                maybe_overlap=False)
+        output = _local_gather(
+            local_output_buf, pos, local_batch_size, maybe_overlap=False
+        )
 
         ctx.moe_args = (global_output_buf.shape[0], world_size)
         variables = (pos, local_expert_count, global_expert_count)
@@ -181,6 +191,7 @@ class MOEGather(Function):
             global_grad_out_buf = grad_out_buf
         return global_grad_out_buf, None, None, None, None, None
 
+
 class AllGather(Function):
     r"""
     A wrapper for the All-Gather function to support auto-differentiation.
@@ -199,6 +210,7 @@ class AllGather(Function):
     def backward(ctx, grad_out):
         rank, dim0 = ctx.args
         return grad_out[rank * dim0 : (rank + 1) * dim0], None, None, None
+
 
 class Slice(Function):
     r"""

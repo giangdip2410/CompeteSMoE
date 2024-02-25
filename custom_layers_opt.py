@@ -1,6 +1,7 @@
 r"""
 FMoE core layer
 """
+
 import tree
 import os
 import torch
@@ -9,8 +10,6 @@ import torch.nn as nn
 from custom_functions import prepare_forward, ensure_comm
 from custom_functions import MOEScatter, MOEGather
 from custom_functions import AllGather, Slice
-# from gates import NaiveGate
-# from custom_gates import *
 from gates import NaiveGate
 
 from fastermoe.config import switch_from_env
@@ -23,18 +22,11 @@ def kl_divergence(softmax_1, softmax_2):
     kl_divergence = KLDivergence(log_prob=False).cuda()
     return kl_divergence(softmax_1, softmax_2)
 
-def cal_kl_loss(input, target):
-    kl_loss = nn.KLDivLoss(reduction="batchmean")
-    input = F.log_softmax(input, dim=1)
-    target = F.softmax(target, dim=1)
-    return kl_loss(input, target)
 
 def cal_mse_loss(input, target):
     mse_loss = nn.MSELoss()
     _loss = mse_loss(input, target)
-    # print(f"Compete Loss: {_loss.detach().cpu().numpy()}")
     return _loss
-
 
 
 def mark_module_parallel_comm(module, comm):
@@ -46,7 +38,9 @@ def mark_module_parallel_comm(module, comm):
         setattr(p, "dp_comm", comm)
 
 
-def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, **kwargs):
+def _fmoe_general_global_forward(
+    inp, gate, expert_fn, num_expert, world_size, **kwargs
+):
     r"""
     A private function that performs the following steps to complete the MoE
     computation.
@@ -72,7 +66,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, *
     def scatter_func(tensor):
         return MOEScatter.apply(
             tensor,
-            torch.div(pos, topk, rounding_mode='floor'),
+            torch.div(pos, topk, rounding_mode="floor"),
             local_expert_count,
             global_expert_count,
             fwd_batch_size,
@@ -102,7 +96,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, *
 
 
 fmoe_faster_schedule = False
-if switch_from_env('FMOE_FASTER_SCHEDULE_ENABLE', False):
+if switch_from_env("FMOE_FASTER_SCHEDULE_ENABLE", False):
     fmoe_faster_schedule = True
     from .fastermoe.schedule import _fmoe_general_global_forward
 
@@ -134,18 +128,30 @@ class FMoEOpt(nn.Module):
         mp_group=None,  # being deprecated
         slice_group=None,
         moe_group=None,
-        top_k=2,
+        moe_top_k=2,
         gate=NaiveGate,
         expert=None,
         gate_hook=None,
         mask=None,
         mask_dict=None,
+        freq=0.0,
+        alpha=0.0,
+        act_experts="shuffle",
+        g_blance=False,
+        opt_blance=False,
+        combine_gate=False,
+        opt_loss="mse",
     ):
         super().__init__()
         self.num_expert = num_expert
         self.d_model = d_model
         self.world_size = world_size
-
+        self.freq = freq
+        self.alpha = alpha
+        self.act_experts = act_experts
+        self.opt_blance = opt_blance
+        self.combine_gate = combine_gate
+        self.opt_loss = opt_loss
         self.slice_group = slice_group
         if mp_group is not None:
             print("[Warning] mp_group is being deprecated")
@@ -157,7 +163,7 @@ class FMoEOpt(nn.Module):
             self.slice_size = self.slice_group.size()
             self.slice_rank = self.slice_group.rank()
 
-        self.top_k = top_k
+        self.top_k = moe_top_k
         if type(expert) is list:
             self.experts = nn.ModuleList([e(d_model) for e in expert])
             self.experts_fused = False
@@ -168,7 +174,7 @@ class FMoEOpt(nn.Module):
         else:
             self.experts_fused = True
 
-        self.gate = gate(d_model, num_expert, world_size, top_k)
+        self.gate = gate(d_model, num_expert, world_size, moe_top_k, g_blance)
         self.gate_hook = gate_hook
         self.mask = mask
         self.mask_dict = mask_dict
@@ -207,8 +213,25 @@ class FMoEOpt(nn.Module):
                 mark_module_parallel_comm(self.experts, comm)
         mark_module_parallel_comm(self.gate, "gate")
 
-    def forward(self, moe_inp):
+    def cal_load_balance(self, gate, gate_top_k_idx):
 
+        score = F.softmax(gate, dim=-1)
+        valid_idx = gate_top_k_idx[gate_top_k_idx > -1]
+        fraction_expert = (
+            torch.scatter_add(
+                torch.zeros(self.num_expert, device=valid_idx.device),
+                0,
+                valid_idx,
+                torch.ones_like(valid_idx, dtype=torch.float),
+            )
+            / valid_idx.numel()
+        )
+        prob_expert = score.sum(dim=0) / valid_idx.numel()
+
+        loss = (fraction_expert * prob_expert).sum() * self.num_expert
+        return loss
+
+    def forward(self, moe_inp):
         r"""
         The FMoE module first computes gate output, and then conduct MoE forward
         according to the gate.  The score of the selected gate given by the
@@ -238,63 +261,148 @@ class FMoEOpt(nn.Module):
             moe_inp = tree.map_structure(slice_func, moe_inp)
         flip_ = random.random()
         gate_top_k_idx, gate_score, gate_ = self.gate(moe_inp, return_all_scores=True)
+
         if self.training:
-            if flip_ > 0:
-                #searching best routing optimal
-                gate_top_k_val_opt, gate_top_k_idx_opt = torch.topk(gate_, k=self.num_expert, dim=-1, largest=True, sorted=False )  # [.. x top_k]
-                gate_top_k_val_opt = gate_top_k_val_opt.view(-1, self.num_expert) # (BxL) x 1 x num_experts
-                gate_score_opt = F.softmax(gate_top_k_val_opt, dim=-1)
-                with torch.no_grad():
-                    
-                    if hasattr(self.gate, 'dynamic_top_k'):
-                        self.top_k = self.gate.dynamic_top_k
-
-                    if self.gate_hook is not None:
-                        self.gate_hook(gate_top_k_idx_opt, gate_score_opt, None)
-
-                    # delete masked tensors
-                    if self.mask is not None and self.mask_dict is not None:
-                        # TODO: to fix
-                        def delete_mask_func(tensor):
-                            # to: (BxL') x d_model
-                            tensor = tensor[mask == 0, :]
-                            return tensor
-
-                        mask = self.mask.view(-1)
-                        moe_inp = tree.map_structure(delete_mask_func, moe_inp)
-                        gate_top_k_idx_opt = gate_top_k_idx_opt[mask == 0, :]
-                    bs = moe_inp.shape[0]
-                    fwd_tmp = _fmoe_general_global_forward(
-                        moe_inp, gate_top_k_idx_opt, self.expert_fn,
-                        self.num_expert, self.world_size,
-                        experts=self.experts
-                    ).reshape(bs, self.num_expert, -1)
-                    
-                    fwd_norm = torch.norm(fwd_tmp, dim=2)
-                    # gate_top_k_val_optim, gate_top_k_idx_optim = torch.topk(fwd_norm, k=self.top_k, dim=-1, largest=True, sorted=False)
-                    # # get output
-                    # gate_top_k_val_optim = gate_top_k_val_optim.view(-1, self.top_k)
-                    # # push low score to zeros
-                    # gate_score2 = torch.zeros(
-                    #     (gate_top_k_val_optim.shape[0], self.num_expert)
-                    # ).cuda()
-                    # gate_score2.fill_(-10e9)
-                    # # fill with topk score value
-                    # gate_score2 = gate_score2.scatter(1, gate_top_k_idx_optim, gate_top_k_val_optim)
-                    gate_score_optimal = F.softmax(fwd_norm, dim=1)
-                # # calculate loss
-                add_loss = cal_mse_loss(
-                    gate_score_opt,
-                    gate_score_optimal,
+            if flip_ > (1 - self.freq):
+                # all experts score
+                gate_top_k_val_org, _ = torch.topk(
+                    gate_, k=self.num_expert, dim=-1, largest=True, sorted=False
                 )
-                #add to balance loss
-                self.gate.loss += add_loss * 5.0
-                
-        # else:
-        #     add_loss = None
-        # gate_top_k_idx, gate_score = self.gate(moe_inp)
+                gate_top_k_val_org = gate_top_k_val_org.view(
+                    -1, self.num_expert
+                )  # (BxL) x 1 x top_k
+                gate_score_org = F.softmax(gate_top_k_val_org, dim=-1)
+                # activate all experts with shuffle index
+                if self.act_experts == "shuffle":
+                    # searching best routing optimal
+                    with torch.no_grad():
+                        gate_dense = torch.ones_like(
+                            gate_
+                        )  # average the importance of all experts
+                        gate_top_k_val_opt, gate_top_k_idx_opt = torch.topk(
+                            gate_dense,
+                            k=self.num_expert,
+                            dim=-1,
+                            largest=True,
+                            sorted=False,
+                        )  # [.. x top_k]
+                        gate_top_k_val_opt = gate_top_k_val_opt.view(
+                            -1, self.num_expert
+                        )  # (BxL) x 1 x num_experts
+                        gate_score_opt = F.softmax(gate_top_k_val_opt, dim=-1)
 
-        if hasattr(self.gate, 'dynamic_top_k'):
+                        if hasattr(self.gate, "dynamic_top_k"):
+                            self.top_k = self.gate.dynamic_top_k
+
+                        if self.gate_hook is not None:
+                            self.gate_hook(gate_top_k_idx_opt, gate_score_opt, None)
+
+                        # delete masked tensors
+                        if self.mask is not None and self.mask_dict is not None:
+                            # TODO: to fix
+                            def delete_mask_func(tensor):
+                                # to: (BxL') x d_model
+                                tensor = tensor[mask == 0, :]
+                                return tensor
+
+                            mask = self.mask.view(-1)
+                            moe_inp = tree.map_structure(delete_mask_func, moe_inp)
+                            gate_top_k_idx_opt = gate_top_k_idx_opt[mask == 0, :]
+                        bs = moe_inp.shape[0]
+                        fwd_tmp = _fmoe_general_global_forward(
+                            moe_inp,
+                            gate_top_k_idx_opt,
+                            self.expert_fn,
+                            self.num_expert,
+                            self.world_size,
+                            experts=self.experts,
+                        ).reshape(bs, self.num_expert, -1)
+                        # cal norm of output experts
+                        fwd_norm = torch.norm(fwd_tmp, dim=2)
+                # activate all experts without shuffle index
+                else:
+                    # activate with grad
+                    if self.opt_blance:
+                        fwd_tmp = None
+                        for i in range(self.num_expert):
+                            # print(moe_inp.shape, self.experts.htoh4.weight[i].T.shape, self.experts.htoh4.bias.shape)
+                            temp_ = (
+                                moe_inp @ self.experts.htoh4.weight[i].T
+                                + self.experts.htoh4.bias[i]
+                            )
+                            temp_ = F.relu(temp_)
+                            temp_ = (
+                                temp_ @ self.experts.h4toh.weight[i].T
+                                + self.experts.h4toh.bias[i]
+                            )
+                            temp_ = torch.unsqueeze(temp_, -1)
+                            if fwd_tmp is None:
+                                fwd_tmp = temp_.clone()
+                            else:
+                                fwd_tmp = torch.concat([fwd_tmp, temp_], dim=-1)
+                    # activate without grad
+                    else:
+                        with torch.no_grad():
+                            fwd_tmp = None
+                            for i in range(self.num_expert):
+                                # print(moe_inp.shape, self.experts.htoh4.weight[i].T.shape, self.experts.htoh4.bias.shape)
+                                temp_ = (
+                                    moe_inp @ self.experts.htoh4.weight[i].T
+                                    + self.experts.htoh4.bias[i]
+                                )
+                                temp_ = F.relu(temp_)
+                                temp_ = (
+                                    temp_ @ self.experts.h4toh.weight[i].T
+                                    + self.experts.h4toh.bias[i]
+                                )
+                                temp_ = torch.unsqueeze(temp_, -1)
+                                if fwd_tmp is None:
+                                    fwd_tmp = temp_.clone()
+                                else:
+                                    fwd_tmp = torch.concat([fwd_tmp, temp_], dim=-1)
+                    # cal norm of output experts
+                    fwd_norm = torch.norm(fwd_tmp, dim=1)
+                # ensemble with gate information
+                if self.combine_gate:
+                    fwd_norm = fwd_norm * 0.5 + gate_ * 0.5
+                gate_top_k_val_optim, gate_top_k_idx_optim = torch.topk(
+                    fwd_norm, k=self.top_k, dim=-1, largest=True, sorted=False
+                )
+                # if balance loss
+                if self.opt_blance:
+                    opt_bl_loss = self.cal_load_balance(fwd_norm, gate_top_k_idx_optim)
+                # get output
+                gate_top_k_val_optim = gate_top_k_val_optim.view(-1, self.top_k)
+                # push low score to zeros
+                gate_score2 = torch.zeros(
+                    (gate_top_k_val_optim.shape[0], self.num_expert)
+                ).cuda()
+                gate_score2.fill_(-10e9)
+                # fill with topk score value
+                gate_score2 = gate_score2.scatter(
+                    1, gate_top_k_idx_optim, gate_top_k_val_optim
+                )
+                gate_score_optimal = F.softmax(gate_score2, dim=1)
+                # # calculate loss
+                if self.opt_loss == "mse":
+                    add_loss = cal_mse_loss(
+                        gate_score_org,
+                        gate_score_optimal,
+                    )
+                else:
+                    add_loss = kl_divergence(
+                        gate_score_org,
+                        gate_score_optimal,
+                    )
+                # if balance loss
+                if self.opt_blance:
+                    add_loss += opt_bl_loss
+                    # add to balance loss
+                    self.gate.loss = add_loss * self.alpha
+                else:
+                    self.gate.loss = add_loss * self.alpha
+
+        if hasattr(self.gate, "dynamic_top_k"):
             self.top_k = self.gate.dynamic_top_k
 
         if self.gate_hook is not None:
@@ -313,11 +421,13 @@ class FMoEOpt(nn.Module):
             gate_top_k_idx = gate_top_k_idx[mask == 0, :]
 
         fwd = _fmoe_general_global_forward(
-            moe_inp, gate_top_k_idx, self.expert_fn,
-            self.num_expert, self.world_size,
-            experts=self.experts
+            moe_inp,
+            gate_top_k_idx,
+            self.expert_fn,
+            self.num_expert,
+            self.world_size,
+            experts=self.experts,
         )
-       
 
         # recover deleted tensors
         if self.mask is not None and self.mask_dict is not None:

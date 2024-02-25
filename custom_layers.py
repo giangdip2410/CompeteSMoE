@@ -11,6 +11,7 @@ from gates import NaiveGate
 
 from fastermoe.config import switch_from_env
 
+
 def mark_module_parallel_comm(module, comm):
     r"""
     Mark all parameters in `module` as doing data parallel in `comm`, where
@@ -19,7 +20,10 @@ def mark_module_parallel_comm(module, comm):
     for p in module.parameters():
         setattr(p, "dp_comm", comm)
 
-def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, **kwargs):
+
+def _fmoe_general_global_forward(
+    inp, gate, expert_fn, num_expert, world_size, **kwargs
+):
     r"""
     A private function that performs the following steps to complete the MoE
     computation.
@@ -45,7 +49,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, *
     def scatter_func(tensor):
         return MOEScatter.apply(
             tensor,
-            torch.div(pos, topk, rounding_mode='floor'),
+            torch.div(pos, topk, rounding_mode="floor"),
             local_expert_count,
             global_expert_count,
             fwd_batch_size,
@@ -73,10 +77,12 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, *
     outp = tree.map_structure(gather_func, x)
     return outp
 
+
 fmoe_faster_schedule = False
-if switch_from_env('FMOE_FASTER_SCHEDULE_ENABLE', False):
+if switch_from_env("FMOE_FASTER_SCHEDULE_ENABLE", False):
     fmoe_faster_schedule = True
     from .fastermoe.schedule import _fmoe_general_global_forward
+
 
 class FMoE(nn.Module):
     r"""
@@ -96,6 +102,7 @@ class FMoE(nn.Module):
     * `expert` can be specified as a module class, it is used to generate
     `num_expert` expert modules.
     """
+
     def __init__(
         self,
         num_expert=32,
@@ -104,7 +111,7 @@ class FMoE(nn.Module):
         mp_group=None,  # being deprecated
         slice_group=None,
         moe_group=None,
-        top_k=2,
+        moe_top_k=2,
         gate=NaiveGate,
         expert=None,
         gate_hook=None,
@@ -127,7 +134,7 @@ class FMoE(nn.Module):
             self.slice_size = self.slice_group.size()
             self.slice_rank = self.slice_group.rank()
 
-        self.top_k = top_k
+        self.top_k = moe_top_k
         if type(expert) is list:
             self.experts = nn.ModuleList([e(d_model) for e in expert])
             self.experts_fused = False
@@ -138,7 +145,7 @@ class FMoE(nn.Module):
         else:
             self.experts_fused = True
 
-        self.gate = gate(d_model, num_expert, world_size, top_k)
+        self.gate = gate(d_model, num_expert, world_size, moe_top_k)
         self.gate_hook = gate_hook
         self.mask = mask
         self.mask_dict = mask_dict
@@ -208,7 +215,7 @@ class FMoE(nn.Module):
 
         gate_top_k_idx, gate_score = self.gate(moe_inp)
 
-        if hasattr(self.gate, 'dynamic_top_k'):
+        if hasattr(self.gate, "dynamic_top_k"):
             self.top_k = self.gate.dynamic_top_k
 
         if self.gate_hook is not None:
@@ -227,9 +234,12 @@ class FMoE(nn.Module):
             gate_top_k_idx = gate_top_k_idx[mask == 0, :]
 
         fwd = _fmoe_general_global_forward(
-            moe_inp, gate_top_k_idx, self.expert_fn,
-            self.num_expert, self.world_size,
-            experts=self.experts
+            moe_inp,
+            gate_top_k_idx,
+            self.expert_fn,
+            self.num_expert,
+            self.world_size,
+            experts=self.experts,
         )
 
         # recover deleted tensors
@@ -289,6 +299,7 @@ class FMoE(nn.Module):
         ), "MoE outputs must have the same batch size"
         return moe_outp
 
+
 ##############################################################################
 
 import torch
@@ -296,6 +307,7 @@ import torch.nn as nn
 import math
 import fmoe_cuda
 from torch.autograd import Function
+
 
 class MOELinear(Function):
     r"""
@@ -323,6 +335,7 @@ class MOELinear(Function):
 
         return grad_inp_buf, None, grad_weight, grad_bias
 
+
 class FMoELinear(nn.Module):
     r"""
     A linear layer that contains multiple experts.
@@ -330,6 +343,7 @@ class FMoELinear(nn.Module):
     performed in parallel to increase the performance.
     The FMoELinear module provides such function.
     """
+
     def __init__(
         self,
         num_expert: int,
