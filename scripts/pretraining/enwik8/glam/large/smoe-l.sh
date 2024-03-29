@@ -3,9 +3,9 @@ mkdir -p checkpoints/enwik8/glam-l/smoe
 args="
 --data /home/gtruong/Project/ICML2/data/enwik8 \
 --base_arch glam \
---architecture sgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name smoe \
---nlayers 6 \
+--nlayers 18 \
 --hid-sz 528 \
 --inner-hid-sz 528 \
 --nheads 8 \

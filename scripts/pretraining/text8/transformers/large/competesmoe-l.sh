@@ -1,10 +1,10 @@
-mkdir -p checkpoints/enwik8/transformers-l/stablemoe
+mkdir -p checkpoints/text8/transformers-l/competesmoe
 
 args="
---data /home/gtruong/Project/ICML2/data/enwik8 \
+--data /home/gtruong/Project/ICML2/data/text8 \
 --base_arch transformer \
 --architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
---gate_name stablemoe \
+--gate_name smoe \
 --nlayers 18 \
 --hid-sz 528 \
 --inner-hid-sz 528 \
@@ -14,13 +14,20 @@ args="
 --dropout 0.1 \
 --load_balance 0.01 \
 --optim adam \
---lr 0.0007 \
+--lr 0.00007 \
 --lr-warmup 6000 \
 --niter 120 \
 --batch-sz 48 \
 --batch-split 2 \
 --nbatches 1000 \
---checkpoint checkpoints/enwik8/transformers-l/stablemoe/stablemoe.pt \
+--optimal_policy \
+--act_experts linear \
+--combine_gate \
+--opt_loss mse \
+--freq_type fix \
+--freq 1.0 \
+--alpha 5.0 \
+--checkpoint checkpoints/text8/transformers-l/competesmoe/competesmoe.pt \
 "
 
 echo "Training ..."

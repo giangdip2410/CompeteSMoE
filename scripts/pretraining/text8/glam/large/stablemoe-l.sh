@@ -1,11 +1,11 @@
-mkdir -p checkpoints/enwik8/glam-l/stablemoe
+mkdir -p checkpoints/text8/glam-l/stablemoe
 
 args="
---data /home/gtruong/Project/ICML2/data/enwik8 \
+--data /home/gtruong/Project/ICML2/data/text8 \
 --base_arch glam \
---architecture sgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name stablemoe \
---nlayers 6 \
+--nlayers 18 \
 --hid-sz 528 \
 --inner-hid-sz 528 \
 --nheads 8 \
@@ -20,7 +20,7 @@ args="
 --batch-sz 48 \
 --batch-split 2 \
 --nbatches 1000 \
---checkpoint checkpoints/enwik8/glam-l/stablemoe/stablemoe.pt \
+--checkpoint checkpoints/text8/glam-l/stablemoe/stablemoe.pt \
 "
 
 echo "Training ..."

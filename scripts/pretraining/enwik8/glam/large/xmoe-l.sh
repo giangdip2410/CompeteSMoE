@@ -2,10 +2,10 @@ mkdir -p checkpoints/enwik8/glam-l/xmoe
 
 args="
 --data /home/gtruong/Project/ICML2/data/enwik8 \
---base_arch transformer \
---architecture sgsfsgsfsgsfsgsfsgsfsgsf \
+--base_arch glam \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name xmoe \
---nlayers 6 \
+--nlayers 18 \
 --hid-sz 528 \
 --inner-hid-sz 528 \
 --nheads 8 \
