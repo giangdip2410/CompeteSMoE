@@ -3,7 +3,7 @@ mkdir -p checkpoints/text8/glam-l/competesmoe
 args="
 --data /home/gtruong/Project/ICML2/data/text8 \
 --base_arch glam \
---architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name smoe \
 --nlayers 18 \
 --hid-sz 528 \

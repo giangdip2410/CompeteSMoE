@@ -3,7 +3,7 @@ mkdir -p checkpoints/enwik8/glam-l/stablemoe
 args="
 --data /home/gtruong/Project/ICML2/data/enwik8 \
 --base_arch glam \
---architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name stablemoe \
 --nlayers 18 \
 --hid-sz 528 \

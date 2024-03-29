@@ -3,7 +3,7 @@ mkdir -p checkpoints/text8/transformers-l/stablemoe
 args="
 --data /home/gtruong/Project/ICML2/data/text8 \
 --base_arch transformer \
---architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name stablemoe \
 --nlayers 18 \
 --hid-sz 528 \

@@ -3,7 +3,7 @@ mkdir -p checkpoints/text8/transformers-l/xmoe
 args="
 --data /home/gtruong/Project/ICML2/data/text8 \
 --base_arch transformer \
---architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name xmoe \
 --nlayers 18 \
 --hid-sz 528 \

@@ -3,7 +3,7 @@ mkdir -p checkpoints/enwik8/transformers-l/smoe_dropout
 args="
 --data /home/gtruong/Project/ICML2/data/enwik8 \
 --base_arch transformer \
---architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
+--architecture sgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsfsgsf \
 --gate_name smoe \
 --nlayers 18 \
 --hid-sz 528 \
