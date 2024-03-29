@@ -14,7 +14,7 @@ args="
 --dropout 0.1 \
 --load_balance 0.01 \
 --optim adam \
---lr 0.00007 \
+--lr 0.0007 \
 --lr-warmup 4000 \
 --niter 80 \
 --batch-sz 48 \
