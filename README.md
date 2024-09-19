@@ -1,6 +1,6 @@
 # Important Announcement
 
-The current implementation may contain **bugs** and it cannot reproduce the numbers reported in the paper. We are working on a more rigorous code base. Thank you for your understanding! 
+The current implementation may contain **bugs** and it cannot reproduce the numbers reported in the paper. We are working on a more rigorous code base and will release it in the near future. Thank you for your understanding! 
 
 # CompeteSMoE - Effective Training of Sparse Mixture of Experts via Competition
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
